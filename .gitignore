@@ -1,0 +1,123 @@
+﻿# ============================================================
+# .gitignore — Car Specialist SLM Fine-Tune Pipeline
+# Gemma-4 E2B-it | QLoRA | Unsloth | Kaggle + HuggingFace
+# ============================================================
+
+# ============================================================
+# PYTHON RUNTIME
+# ============================================================
+__pycache__/
+*.py[cod]
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+
+# ============================================================
+# VIRTUAL ENVIRONMENTS
+# ============================================================
+.env
+.venv
+env/
+venv/
+ENV/
+.python-version
+
+# ============================================================
+# SECRETS & API KEYS — NEVER COMMIT THESE
+# ============================================================
+*.env
+.env.*
+secrets.json
+secrets.yaml
+kaggle.json
+hf_token.txt
+groq_key.txt
+
+# ============================================================
+# MODEL WEIGHTS & CHECKPOINTS — TOO LARGE FOR GIT
+# ============================================================
+*.bin
+*.safetensors
+*.pt
+*.pth
+*.ckpt
+*.gguf
+*.ggml
+checkpoints/
+checkpoints_qlora/
+lora_adapters*/
+merged_model/
+model_weights/
+
+# ============================================================
+# HUGGINGFACE CACHE
+# ============================================================
+.cache/
+huggingface_cache/
+hf_cache/
+
+# ============================================================
+# TRAINING OUTPUT & EVAL RESULTS — LARGE ARTIFACTS
+# ============================================================
+results/
+logs/
+runs/
+wandb/
+mlruns/
+*.jsonl
+baseline_answers*.json
+baseline_scores*.json
+post_eval_scores*.json
+detailed_delta_report.json
+baseline_checkpoint*.jsonl
+*.zip
+*.tar.gz
+*.tar
+
+# ============================================================
+# DATASETS — DO NOT COMMIT RAW DATA
+# ============================================================
+data/
+datasets/
+*.parquet
+*.csv
+*.tsv
+*.arrow
+
+# ============================================================
+# JUPYTER NOTEBOOK CHECKPOINTS
+# ============================================================
+.ipynb_checkpoints/
+*/.ipynb_checkpoints/*
+
+# ============================================================
+# IDE & EDITOR FILES
+# ============================================================
+.vscode/
+*.code-workspace
+.idea/
+*.swp
+*.swo
+*~
+
+# ============================================================
+# OPERATING SYSTEM FILES
+# ============================================================
+Thumbs.db
+Desktop.ini
+.DS_Store
+._*
+
+# ============================================================
+# TEMPORARY & SCRATCH FILES
+# ============================================================
+tmp/
+temp/
+scratch/
+*.tmp
+*.bak
+*.log
+*.out
+nohup.out
