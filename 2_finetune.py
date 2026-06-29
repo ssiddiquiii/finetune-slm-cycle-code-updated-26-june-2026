@@ -364,3 +364,21 @@ print("Ready for Post-Eval fusion processing.")
 # )
 
 # print("✅ Model successfully merged and uploaded to Hugging Face!")
+
+# ============================================================
+# CELL 11 — GGUF CONVERSION & HUGGINGFACE PUSH (OLLAMA SUPPORT)
+# ● CONVERTS FINE-TUNED MODEL INTO 4-BIT GGUF FORMAT
+# ● REDUCES SIZE TO ~1.5GB FOR CPU/LAPTOP INFERENCE
+# ● PUSHES DIRECTLY TO HUGGINGFACE FOR OLLAMA INTEGRATION
+# ============================================================
+
+# print("Converting to GGUF and pushing to Hugging Face for Ollama...")
+
+# model.push_to_hub_gguf(
+#     "ssiddiquii/car-specialist-gemma-gguf",
+#     tokenizer,
+#     quantization_method = "q4_k_m",
+#     token = HF_TOKEN
+# )
+
+# print("✅ GGUF model successfully uploaded! Ready for Ollama: ollama run hf.co/ssiddiquii/car-specialist-gemma-gguf")
