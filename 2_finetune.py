@@ -345,40 +345,38 @@ print(f"✓ Zip created: {zip_path}")
 print("Ready for Post-Eval fusion processing.")
 
 # ============================================================
-# CELL 10 — ADAPTER MERGE & HUGGINGFACE HUB PUSH (OPTIONAL)
-# ● MERGES LORA ADAPTERS INTO BASE MODEL AT FULL 16-BIT PRECISION
-# ● CREATES A STANDALONE DEPLOYABLE MODEL (NO ADAPTER REQUIRED)
-# ● PUSHES MERGED MODEL TO HUGGINGFACE REPO FOR SERVING
-# ● GENERATES ~5GB MERGED MODEL FILE FOR PRODUCTION USE
-# ● UNCOMMENT THIS CELL WHEN READY FOR FINAL HUB DEPLOYMENT
+# CELL 10 — HUGGINGFACE HUB UPLOAD (ADAPTERS & GGUF FOR OLLAMA)
+# ● PUSHES LIGHTWEIGHT LORA ADAPTERS TO HUB (QUICK DOWNLOAD)
+# ● PUSHES 4-BIT GGUF MODEL TO HUB FOR LOCAL OLLAMA SERVING
+# ● UNCOMMENT THESE LINES TO DEPLOY YOUR MODEL ONLINE
 # ============================================================
 
-# print("Merging adapters with base model and pushing to Hugging Face...")
+# print("Pushing LoRA Adapters to Hugging Face...")
+# model.push_to_hub("ssiddiquii/car-specialist-gemma-adapters", token=HF_TOKEN)
+# tokenizer.push_to_hub("ssiddiquii/car-specialist-gemma-adapters", token=HF_TOKEN)
 
-# # "merged_16bit" ka matlab hai ye model ko original size (5GB) me merge karega
-# model.push_to_hub_merged(
-#     "ssiddiquii/merged-car-specialist-gemma", 
-#     tokenizer, 
-#     save_method = "merged_16bit", 
-#     token = HF_TOKEN
-# )
-
-# print("✅ Model successfully merged and uploaded to Hugging Face!")
-
-# ============================================================
-# CELL 11 — GGUF CONVERSION & HUGGINGFACE PUSH (OLLAMA SUPPORT)
-# ● CONVERTS FINE-TUNED MODEL INTO 4-BIT GGUF FORMAT
-# ● REDUCES SIZE TO ~1.5GB FOR CPU/LAPTOP INFERENCE
-# ● PUSHES DIRECTLY TO HUGGINGFACE FOR OLLAMA INTEGRATION
-# ============================================================
-
-# print("Converting to GGUF and pushing to Hugging Face for Ollama...")
-
+# print("Converting to GGUF and pushing for Ollama...")
 # model.push_to_hub_gguf(
 #     "ssiddiquii/car-specialist-gemma-gguf",
 #     tokenizer,
 #     quantization_method = "q4_k_m",
 #     token = HF_TOKEN
 # )
+# print("✅ Uploads complete! For Ollama use: ollama run hf.co/ssiddiquii/car-specialist-gemma-gguf")
 
-# print("✅ GGUF model successfully uploaded! Ready for Ollama: ollama run hf.co/ssiddiquii/car-specialist-gemma-gguf")
+
+# ============================================================
+# CELL 11 — FULL 16-BIT MODEL MERGE (OPTIONAL / LEGACY)
+# ● MERGES ADAPTERS INTO BASE MODEL AT FULL 16-BIT PRECISION
+# ● GENERATES ~5GB MERGED MODEL FILE (NOT NEEDED FOR OLLAMA)
+# ● KEEP THIS COMMENTED OUT UNLESS YOU SPECIFICALLY NEED IT
+# ============================================================
+
+# print("Merging adapters with base model and pushing to Hugging Face...")
+# model.push_to_hub_merged(
+#     "ssiddiquii/merged-car-specialist-gemma", 
+#     tokenizer, 
+#     save_method = "merged_16bit", 
+#     token = HF_TOKEN
+# )
+# print("✅ 16-bit Model successfully merged and uploaded!")
