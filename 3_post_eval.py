@@ -10,10 +10,10 @@ import os
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
 print("Installing stable evaluation stack...")
-!pip uninstall -y torchao -q
-!pip install -q -U unsloth
-!pip install -q -U "unsloth[kaggle-new] @ git+https://github.com/unslothai/unsloth.git"
-!pip install -q -U "trl>=0.18.2,<=0.24.0" "datasets>=3.4.1,<4.4.0" peft accelerate bitsandbytes huggingface_hub sentencepiece "protobuf>=3.20.3,<6.0.0" deepeval litellm nest_asyncio
+!pip uninstall -y torchao -q 2>/dev/null
+!pip install -q --no-warn-conflicts -U unsloth
+!pip install -q --no-warn-conflicts -U "unsloth[kaggle-new] @ git+https://github.com/unslothai/unsloth.git"
+!pip install -q --no-warn-conflicts -U "trl>=0.18.2,<=0.24.0" "datasets>=3.4.1,<4.4.0" peft accelerate bitsandbytes huggingface_hub sentencepiece "protobuf>=3.20.3,<6.0.0" deepeval litellm nest_asyncio
 
 print("\n" + "="*60)
 print("✅ INSTALLATIONS COMPLETE")

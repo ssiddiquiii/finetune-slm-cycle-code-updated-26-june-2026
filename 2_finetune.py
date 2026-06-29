@@ -11,10 +11,10 @@ import os
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
 print("Installing stable training stack...")
-!pip install -q "trl>=0.18.2,<=0.24.0" "datasets>=3.4.1,<4.4.0" "protobuf>=3.20.3,<6.0.0"
-!pip install -q -U unsloth
-!pip install -q -U "unsloth[kaggle-new] @ git+https://github.com/unslothai/unsloth.git"
-!pip install -q peft accelerate bitsandbytes huggingface_hub sentencepiece deepeval litellm
+!pip install -q --no-warn-conflicts "trl>=0.18.2,<=0.24.0" "datasets>=3.4.1,<4.4.0" "protobuf>=3.20.3,<6.0.0"
+!pip install -q --no-warn-conflicts -U unsloth
+!pip install -q --no-warn-conflicts -U "unsloth[kaggle-new] @ git+https://github.com/unslothai/unsloth.git"
+!pip install -q --no-warn-conflicts peft accelerate bitsandbytes huggingface_hub sentencepiece deepeval litellm
 
 print("\n" + "="*60)
 print("✅ INSTALLATIONS COMPLETE")
