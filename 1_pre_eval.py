@@ -20,13 +20,14 @@ print(f"Python baseline: {sys.version.split()[0]}")
 print(f"PyTorch engine:  {torch.__version__}")
 
 # Uninstall conflicting runtime modules
-!pip uninstall -y torchao -q
+!pip uninstall -y torchao -q 2>/dev/null
 
 # Freeze boundary parameters to guarantee Unsloth framework stability
-!pip install -q "trl>=0.18.2,<=0.24.0" "datasets>=3.4.1,<4.4.0" "protobuf>=3.20.3,<6.0.0"
-!pip install -q -U unsloth
-!pip install -q -U "unsloth[kaggle-new] @ git+https://github.com/unslothai/unsloth.git"
-!pip install -q peft accelerate bitsandbytes huggingface_hub sentencepiece deepeval litellm nest_asyncio
+# Note: --no-warn-conflicts suppresses RAPIDS/dask-cuda dependency resolver noise on Kaggle
+!pip install -q --no-warn-conflicts "trl>=0.18.2,<=0.24.0" "datasets>=3.4.1,<4.4.0" "protobuf>=3.20.3,<6.0.0"
+!pip install -q --no-warn-conflicts -U unsloth
+!pip install -q --no-warn-conflicts -U "unsloth[kaggle-new] @ git+https://github.com/unslothai/unsloth.git"
+!pip install -q --no-warn-conflicts peft accelerate bitsandbytes huggingface_hub sentencepiece deepeval litellm nest_asyncio
 
 print("\n✅ CELL 1 COMPLETE: Environment binaries locked and deployed.")
 
@@ -131,7 +132,7 @@ class Config:
     
     max_new_tokens: int = 256
     max_input_length: int = 1024
-    eval_model: str = "groq/gpt-oss-20b"            # UPDATED: llama-3.1-8b-instant deprecated (Aug 16 2026)
+    eval_model: str = "groq/openai/gpt-oss-20b"     # FIX: full model path required by Groq API
     eval_threshold: float = 0.7
     base_dir: str = "/kaggle/working/car_repair_slm_v2"
 

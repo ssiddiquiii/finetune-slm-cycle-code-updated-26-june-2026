@@ -81,7 +81,7 @@ class PostEvalConfig:
     adapter_dir: str = "/kaggle/input/datasets/sameedsiddiqui0347/qlora-adapters" 
     baseline_dir: str = "/kaggle/input/datasets/sameedsiddiqui0347/baseline-artifacts" 
     
-    eval_model: str = "groq/gpt-oss-20b"            # UPDATED: llama-3.1-8b-instant deprecated (Aug 16 2026)
+    eval_model: str = "groq/openai/gpt-oss-20b"     # FIX: full model path required by Groq API
     eval_threshold: float = 0.7
     max_new_tokens: int = 256
     max_input_length: int = 1024
