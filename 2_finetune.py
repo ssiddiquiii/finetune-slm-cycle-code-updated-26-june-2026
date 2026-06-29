@@ -345,38 +345,16 @@ print(f"✓ Zip created: {zip_path}")
 print("Ready for Post-Eval fusion processing.")
 
 # ============================================================
-# CELL 10 — HUGGINGFACE HUB UPLOAD (ADAPTERS & GGUF FOR OLLAMA)
-# ● PUSHES LIGHTWEIGHT LORA ADAPTERS TO HUB (QUICK DOWNLOAD)
-# ● PUSHES 4-BIT GGUF MODEL TO HUB FOR LOCAL OLLAMA SERVING
-# ● UNCOMMENT THESE LINES TO DEPLOY YOUR MODEL ONLINE
+# CELL 10 — LOCAL GGUF EXPORT (FOR LLAMA-CPP-PYTHON BACKEND)
+# ● CONVERTS FINE-TUNED MODEL INTO 4-BIT GGUF FORMAT
+# ● SAVES DIRECTLY TO KAGGLE WORKING DIRECTORY (~1.5GB)
+# ● DOWNLOAD THIS FILE TO USE IN YOUR PYTHON BACKEND
 # ============================================================
 
-# print("Pushing LoRA Adapters to Hugging Face...")
-# model.push_to_hub("ssiddiquii/car-specialist-gemma-adapters", token=HF_TOKEN)
-# tokenizer.push_to_hub("ssiddiquii/car-specialist-gemma-adapters", token=HF_TOKEN)
-
-# print("Converting to GGUF and pushing for Ollama...")
-# model.push_to_hub_gguf(
-#     "ssiddiquii/car-specialist-gemma-gguf",
-#     tokenizer,
-#     quantization_method = "q4_k_m",
-#     token = HF_TOKEN
-# )
-# print("✅ Uploads complete! For Ollama use: ollama run hf.co/ssiddiquii/car-specialist-gemma-gguf")
-
-
-# ============================================================
-# CELL 11 — FULL 16-BIT MODEL MERGE (OPTIONAL / LEGACY)
-# ● MERGES ADAPTERS INTO BASE MODEL AT FULL 16-BIT PRECISION
-# ● GENERATES ~5GB MERGED MODEL FILE (NOT NEEDED FOR OLLAMA)
-# ● KEEP THIS COMMENTED OUT UNLESS YOU SPECIFICALLY NEED IT
-# ============================================================
-
-# print("Merging adapters with base model and pushing to Hugging Face...")
-# model.push_to_hub_merged(
-#     "ssiddiquii/merged-car-specialist-gemma", 
-#     tokenizer, 
-#     save_method = "merged_16bit", 
-#     token = HF_TOKEN
-# )
-# print("✅ 16-bit Model successfully merged and uploaded!")
+print("Converting and saving GGUF model locally...")
+model.save_pretrained_gguf(
+    "car_specialist_gemma2b", 
+    tokenizer, 
+    quantization_method = "q4_k_m"
+)
+print("✅ GGUF model saved locally! Download the 'car_specialist_gemma2b' folder from Kaggle output.")
