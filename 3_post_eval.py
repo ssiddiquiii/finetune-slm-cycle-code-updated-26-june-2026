@@ -277,10 +277,17 @@ class LiteLLMJudge(DeepEvalBaseLLM):
                 with LiteLLMJudge._lock: LiteLLMJudge._call_log.append((time.time(), actual_tokens))
                 
                 text = resp.choices[0].message.content.strip()
-                if text.startswith("```"):
-                    text = text.split("```")[1]
-                    if text.startswith("json"): text = text[4:]
-                    text = text.strip()
+                
+                # Robust extraction: find the first '{' and last '}' to strip <think> blocks and markdown backticks
+                json_start = text.find('{')
+                json_end = text.rfind('}')
+                if json_start != -1 and json_end != -1 and json_end > json_start:
+                    text = text[json_start:json_end + 1]
+                else:
+                    if text.startswith("```"):
+                        text = text.split("```")[1]
+                        if text.startswith("json"): text = text[4:]
+                        text = text.strip()
                 
                 if schema is not None: return schema.model_validate_json(text)
                 return text
