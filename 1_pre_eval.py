@@ -275,7 +275,9 @@ class LiteLLMJudge(DeepEvalBaseLLM):
             "model": self.model_name, "messages": [{"role": "user", "content": prompt}],
             "api_key": self.api_key, "temperature": 0, "max_tokens": self.max_tokens,
         }
-        if schema is not None: kwargs["response_format"] = {"type": "json_object"}
+        # Commented out to prevent Groq 400 Bad Request errors when DeepEval prompts do not contain the word 'json'
+        # or when reasoning_format conflicts arise. The braces parser will extract JSON anyway.
+        # if schema is not None: kwargs["response_format"] = {"type": "json_object"}
 
         for attempt in range(retries):
             self._throttle(estimated)
