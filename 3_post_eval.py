@@ -135,8 +135,8 @@ model, tokenizer = FastModel.from_pretrained(
     token=HF_TOKEN,
 )
 
-# Pre-emptively disable caching to keep generation loops stable
-model.config.use_cache = False
+# Enable caching for faster inference generation loops
+model.config.use_cache = True
 
 lora_count = sum(1 for name, _ in model.named_modules() if 'lora' in name.lower())
 print(f"\n✓ Model + adapters loaded. LoRA modules detected: {lora_count}")

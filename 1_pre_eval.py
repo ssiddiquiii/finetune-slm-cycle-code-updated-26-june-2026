@@ -425,6 +425,7 @@ def generate(question: str) -> str:
         return_tensors="pt",
         truncation=True,
         max_length=CONFIG.max_input_length,
+        add_special_tokens=False, # Prevents double BOS token errors
     ).to(model.device)
 
     out = model.generate(
