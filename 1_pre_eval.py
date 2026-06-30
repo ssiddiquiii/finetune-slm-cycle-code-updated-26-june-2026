@@ -132,7 +132,7 @@ class Config:
     
     max_new_tokens: int = 256
     max_input_length: int = 1024
-    eval_model: str = "groq/openai/gpt-oss-20b"     # FIX: full model path required by Groq API
+    eval_model: str = "groq/llama-3.3-70b-versatile"
     eval_threshold: float = 0.7
     base_dir: str = "/kaggle/working/car_repair_slm_v2"
 
@@ -246,7 +246,7 @@ class LiteLLMJudge(DeepEvalBaseLLM):
     _lock = threading.Lock()
     _call_log = []
 
-    def __init__(self, model_name, api_key, rpm_limit=30, tpm_limit=6000, safety=0.70, max_tokens=1024):
+    def __init__(self, model_name, api_key, rpm_limit=30, tpm_limit=6000, safety=0.70, max_tokens=8192):
         self.model_name = model_name
         self.api_key = api_key
         self.rpm_limit = rpm_limit
@@ -264,20 +264,26 @@ class LiteLLMJudge(DeepEvalBaseLLM):
                 self._prune()
                 if (len(LiteLLMJudge._call_log) < self.rpm_limit and
                     sum(n for _, n in LiteLLMJudge._call_log) + estimated_tokens <= self.tpm_budget):
+                    LiteLLMJudge._call_log.append((time.time(), estimated_tokens))
                     return
                 oldest = LiteLLMJudge._call_log[0][0] if LiteLLMJudge._call_log else time.time()
                 wait = max(1.0, min((oldest + 61) - time.time(), 30.0))
             time.sleep(wait)
 
     def _call(self, prompt, schema=None, retries=5):
+        print(f">>> LiteLLM Judge Triggered | Schema: {schema is not None} <<<")
+        try:
+            with open("/kaggle/working/car_repair_slm_v2/logs/judge_debug.txt", "a") as df:
+                df.write(f"\n[{time.time()}] CALL INITIATED. SCHEMA: {schema is not None}\n")
+        except: pass
+        
         estimated = len(prompt) // 4 + self.max_tokens
+        prompt += "\n\nCRITICAL INSTRUCTION: Output ONLY valid JSON exactly matching the requested format. Do NOT output conversational text, markdown formatting, or any other extra keys."
         kwargs = {
             "model": self.model_name, "messages": [{"role": "user", "content": prompt}],
             "api_key": self.api_key, "temperature": 0, "max_tokens": self.max_tokens,
         }
-        # Commented out to prevent Groq 400 Bad Request errors when DeepEval prompts do not contain the word 'json'
-        # or when reasoning_format conflicts arise. The braces parser will extract JSON anyway.
-        # if schema is not None: kwargs["response_format"] = {"type": "json_object"}
+        if schema is not None: kwargs["response_format"] = {"type": "json_object"}
 
         for attempt in range(retries):
             self._throttle(estimated)
@@ -285,12 +291,25 @@ class LiteLLMJudge(DeepEvalBaseLLM):
                 resp = litellm.completion(**kwargs)
                 actual_tokens = getattr(resp, 'usage', None).total_tokens if getattr(resp, 'usage', None) else estimated
                 with LiteLLMJudge._lock: LiteLLMJudge._call_log.append((time.time(), actual_tokens))
-                
                 text = resp.choices[0].message.content.strip()
+                raw_text = text
                 
-                # Robust extraction: find the first '{' and last '}' to strip <think> blocks and markdown backticks
-                json_start = text.find('{')
-                json_end = text.rfind('}')
+                print(f"\n[RAW GEMINI OUTPUT]\n{raw_text}\n{'-'*50}\n")
+                
+                try:
+                    with open("/kaggle/working/car_repair_slm_v2/logs/judge_debug.txt", "a", encoding="utf-8") as f:
+                        f.write(f"\n[RAW OUTPUT]\n{raw_text}\n{'-'*50}\n")
+                except Exception:
+                    pass
+                
+                json_start, json_end = -1, -1
+                for i, c in enumerate(text):
+                    if c in '{[':
+                        json_start = i; break
+                for i in range(len(text)-1, -1, -1):
+                    if text[i] in '}]':
+                        json_end = i; break
+                        
                 if json_start != -1 and json_end != -1 and json_end > json_start:
                     text = text[json_start:json_end + 1]
                 else:
@@ -299,14 +318,37 @@ class LiteLLMJudge(DeepEvalBaseLLM):
                         if text.startswith("json"): text = text[4:]
                         text = text.strip()
                 
-                if schema is not None: return schema.model_validate_json(text)
+                try:
+                    import json
+                    text = json.dumps(json.loads(text, strict=False))
+                except Exception as ex:
+                    print(f"[SANITIZER ERROR] {ex}")
+                
+                if schema is not None: 
+                    try:
+                        return schema.model_validate_json(text)
+                    except Exception as e:
+                        print(f"\n[FATAL PYDANTIC PARSE ERROR]: {e}")
+                        try:
+                            with open("/kaggle/working/car_repair_slm_v2/logs/judge_debug.txt", "a") as f:
+                                f.write(f"\n[PYDANTIC ERROR]\n{e}\n{'-'*50}\n")
+                        except: pass
+                        raise
+                
                 return text
             except Exception as e:
                 msg = str(e).lower()
+                try:
+                    with open("/kaggle/working/car_repair_slm_v2/logs/judge_debug.txt", "a") as f:
+                        f.write(f"\n[LITELLM EXCEPTION ATTEMPT {attempt}]\n{e}\n{'-'*50}\n")
+                except: pass
+                
                 if "429" in msg or "rate_limit" in msg: 
                     time.sleep(20)
                     continue
-                if attempt == retries - 1: raise RuntimeError(f"Judge Execution Terminal Exception: {e}")
+                if attempt == retries - 1: 
+                    print(f"---------------------------\n")
+                    raise RuntimeError(f"Judge Execution Terminal Exception: {e}")
                 time.sleep(5)
 
     def load_model(self): return self.model_name
@@ -315,7 +357,10 @@ class LiteLLMJudge(DeepEvalBaseLLM):
     def get_model_name(self): return self.model_name
 
 LiteLLMJudge._call_log = []
-judge = LiteLLMJudge(model_name=CONFIG.eval_model, api_key=GROQ_API_KEY)
+# CELL 8 — LITTELLM JUDGE INSTANTIATION & DEEPEVAL METRICS INJECTION
+# ============================================================
+
+judge = LiteLLMJudge(model_name=CONFIG.eval_model, api_key=GROQ_API_KEY, rpm_limit=25, tpm_limit=11000, max_tokens=1024)
 
 print("Initializing programmatic criteria array via SingleTurnParams...")
 metrics = [
@@ -376,6 +421,9 @@ model, tokenizer = FastModel.from_pretrained(
     full_finetuning=False,
     token=HF_TOKEN,
 )
+
+# Enable caching for faster inference generation loops
+model.config.use_cache = True
 
 try:
     FastModel.for_inference(model)
@@ -514,6 +562,9 @@ total_calls = len(test_cases) * len(metrics)
 print(f"Sequential scoring initialized: {len(test_cases)} configurations × {len(metrics)} targets = {total_calls} calls total.")
 
 BASELINE_CHECKPOINT = RESULTS / "baseline_checkpoint_v2.jsonl"
+# TEMP FIX: Wipe the old failed cache so it runs fresh!
+if BASELINE_CHECKPOINT.exists(): BASELINE_CHECKPOINT.unlink()
+
 scores_by_metric = defaultdict(list)
 per_case = []
 failed_count = 0

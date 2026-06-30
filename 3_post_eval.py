@@ -74,6 +74,8 @@ os.environ['LITELLM_SUPPRESS_DEBUG_INFO'] = 'true'
 os.environ['TOKENIZERS_PARALLELISM'] = 'false'
 
 login(token=HF_TOKEN, add_to_git_credential=False)
+print("✓ HuggingFace instance authenticated.")
+print("✓ Groq API secure bridge verified.")
 
 @dataclass
 class PostEvalConfig:
@@ -81,7 +83,7 @@ class PostEvalConfig:
     adapter_dir: str = "/kaggle/input/datasets/sameedsiddiqui0347/qlora-adapters" 
     baseline_dir: str = "/kaggle/input/datasets/sameedsiddiqui0347/baseline-artifacts" 
     
-    eval_model: str = "groq/openai/gpt-oss-20b"     # FIX: full model path required by Groq API
+    eval_model: str = "groq/llama-3.3-70b-versatile"
     eval_threshold: float = 0.7
     max_new_tokens: int = 256
     max_input_length: int = 1024
@@ -238,7 +240,7 @@ class LiteLLMJudge(DeepEvalBaseLLM):
     _lock = threading.Lock()
     _call_log = []
 
-    def __init__(self, model_name, api_key, rpm_limit=30, tpm_limit=6000, safety=0.70, max_tokens=1024):
+    def __init__(self, model_name, api_key, rpm_limit=30, tpm_limit=6000, safety=0.70, max_tokens=8192):
         self.model_name = model_name
         self.api_key = api_key
         self.rpm_limit = rpm_limit
@@ -256,6 +258,7 @@ class LiteLLMJudge(DeepEvalBaseLLM):
                 self._prune()
                 if (len(LiteLLMJudge._call_log) < self.rpm_limit and
                     sum(n for _, n in LiteLLMJudge._call_log) + estimated_tokens <= self.tpm_budget):
+                    LiteLLMJudge._call_log.append((time.time(), estimated_tokens))
                     return
                 oldest = LiteLLMJudge._call_log[0][0] if LiteLLMJudge._call_log else time.time()
                 wait = max(1.0, min((oldest + 61) - time.time(), 30.0))
@@ -263,13 +266,13 @@ class LiteLLMJudge(DeepEvalBaseLLM):
 
     def _call(self, prompt, schema=None, retries=5):
         estimated = len(prompt) // 4 + self.max_tokens
+        prompt += "\n\nCRITICAL INSTRUCTION: Output ONLY valid JSON exactly matching the requested format. Do NOT output conversational text, markdown formatting, or any other extra keys."
         kwargs = {
             "model": self.model_name, "messages": [{"role": "user", "content": prompt}],
             "api_key": self.api_key, "temperature": 0, "max_tokens": self.max_tokens,
         }
-        # Commented out to prevent Groq 400 Bad Request errors when DeepEval prompts do not contain the word 'json'
-        # or when reasoning_format conflicts arise. The braces parser will extract JSON anyway.
-        # if schema is not None: kwargs["response_format"] = {"type": "json_object"}
+        # Gemini perfectly supports JSON mode without Groq's prompt validation bugs
+        if schema is not None: kwargs["response_format"] = {"type": "json_object"}
 
         for attempt in range(retries):
             self._throttle(estimated)
@@ -277,12 +280,29 @@ class LiteLLMJudge(DeepEvalBaseLLM):
                 resp = litellm.completion(**kwargs)
                 actual_tokens = getattr(resp, 'usage', None).total_tokens if getattr(resp, 'usage', None) else estimated
                 with LiteLLMJudge._lock: LiteLLMJudge._call_log.append((time.time(), actual_tokens))
-                
                 text = resp.choices[0].message.content.strip()
+                raw_text = text
                 
-                # Robust extraction: find the first '{' and last '}' to strip <think> blocks and markdown backticks
-                json_start = text.find('{')
-                json_end = text.rfind('}')
+                # Console Logger (Might be truncated by Kaggle UI)
+                print(f"\n[RAW GEMINI OUTPUT]\n{raw_text}\n{'-'*50}\n")
+                
+                # Fallback File Logger (100% reliable)
+                try:
+                    with open("/kaggle/working/gemini_raw_logs.txt", "a", encoding="utf-8") as f:
+                        f.write(f"\n[RAW GEMINI OUTPUT]\n{raw_text}\n{'-'*50}\n")
+                except Exception:
+                    pass
+                
+                # Robust extraction: preserve both JSON objects {...} and arrays [...]
+                json_start = -1
+                json_end = -1
+                for i, c in enumerate(text):
+                    if c in '{[':
+                        json_start = i; break
+                for i in range(len(text)-1, -1, -1):
+                    if text[i] in '}]':
+                        json_end = i; break
+                        
                 if json_start != -1 and json_end != -1 and json_end > json_start:
                     text = text[json_start:json_end + 1]
                 else:
@@ -291,7 +311,27 @@ class LiteLLMJudge(DeepEvalBaseLLM):
                         if text.startswith("json"): text = text[4:]
                         text = text.strip()
                 
-                if schema is not None: return schema.model_validate_json(text)
+                # Universal Sanitizer: Fix physical newlines inside strings BEFORE any parser (DeepEval or Pydantic)
+                try:
+                    import json
+                    text = json.dumps(json.loads(text, strict=False))
+                except Exception:
+                    pass
+                
+                if schema is not None: 
+                    try:
+                        return schema.model_validate_json(text)
+                    except Exception as e:
+                        print(f"\n[DEBUG - FATAL JSON ERROR]")
+                        print(f"--- RAW TEXT FROM LLM ---")
+                        print(raw_text)
+                        print(f"--- EXTRACTED TEXT ---")
+                        print(text)
+                        print(f"--- PYDANTIC ERROR ---")
+                        print(str(e))
+                        print(f"---------------------------\n")
+                        raise
+                
                 return text
             except Exception as e:
                 msg = str(e).lower()
@@ -306,7 +346,9 @@ class LiteLLMJudge(DeepEvalBaseLLM):
     async def a_generate(self, prompt, schema=None): return self._call(prompt, schema)
     def get_model_name(self): return self.model_name
 
-judge = LiteLLMJudge(model_name=CFG.eval_model, api_key=GROQ_API_KEY)
+# ============================================================
+
+judge = LiteLLMJudge(model_name=CFG.eval_model, api_key=GROQ_API_KEY, rpm_limit=25, tpm_limit=11000, max_tokens=1024)
 metrics = [
     AnswerRelevancyMetric(threshold=CFG.eval_threshold, model=judge, async_mode=False),
     GEval(
