@@ -80,8 +80,8 @@ print("✓ Groq API secure bridge verified.")
 @dataclass
 class PostEvalConfig:
     base_model: str = "unsloth/gemma-4-E2B-it"
-    adapter_dir: str = "/kaggle/input/datasets/sameedsiddiqui0347/qlora-adapters" 
-    baseline_dir: str = "/kaggle/input/datasets/sameedsiddiqui0347/baseline-artifacts" 
+    adapter_dir: str = "/kaggle/input/qlora-adapters" 
+    baseline_dir: str = "/kaggle/input/baseline-artifacts" 
     
     eval_model: str = "groq/llama-3.1-8b-instant"
     eval_threshold: float = 0.7
