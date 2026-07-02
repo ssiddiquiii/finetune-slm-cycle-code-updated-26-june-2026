@@ -299,8 +299,8 @@ sft_config = SFTConfig(
     eval_steps=10,
     save_strategy="steps",
     save_steps=20,
-    save_total_limit=3,           # FIX: Keep 3 checkpoints (was 2) to ensure best is not evicted.
-    load_best_model_at_end=True,  # FIX: CRITICAL — saves best val-loss checkpoint, not final (overfit) one.
+    save_total_limit=1,           # FIX: Keep 1 checkpoint to save Kaggle disk space.
+    load_best_model_at_end=True,  # CRITICAL: saves best val-loss checkpoint
     metric_for_best_model="eval_loss",  # Lower loss = better model.
     greater_is_better=False,      # For loss, lower is better.
     
@@ -343,6 +343,18 @@ shutil.make_archive(base_name=str(ADAPTERS), format="zip", root_dir=str(ADAPTERS
 
 print(f"✓ Zip created: {zip_path}")
 print("Ready for Post-Eval fusion processing.")
+
+# ============================================================
+# AGGRESSIVE DISK CLEANUP
+# Kaggle only has 20GB disk space. GGUF conversion requires ~15GB.
+# We must delete the bulky checkpoints and optimizer states to prevent Errno 28.
+# ============================================================
+print("\nPerforming brutal disk cleanup before GGUF conversion...")
+if CHECKPOINTS.exists():
+    shutil.rmtree(str(CHECKPOINTS))
+    print(f"✓ Deleted training checkpoints to free up space: {CHECKPOINTS}")
+import gc
+gc.collect()
 
 # ============================================================
 # CELL 10 — LOCAL GGUF EXPORT (FOR LLAMA-CPP-PYTHON BACKEND)
