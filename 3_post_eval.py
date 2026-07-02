@@ -83,7 +83,7 @@ class PostEvalConfig:
     adapter_dir: str = "/kaggle/input/datasets/sameedsiddiqui0347/qlora-adapters" 
     baseline_dir: str = "/kaggle/input/datasets/sameedsiddiqui0347/baseline-artifacts" 
     
-    eval_model: str = "groq/llama-3.3-70b-versatile"
+    eval_model: str = "groq/llama-3.1-8b-instant"
     eval_threshold: float = 0.7
     max_new_tokens: int = 256
     max_input_length: int = 1024
@@ -284,7 +284,7 @@ class LiteLLMJudge(DeepEvalBaseLLM):
                 raw_text = text
                 
                 # Console Logger (Might be truncated by Kaggle UI)
-                print(f"\n[RAW GEMINI OUTPUT]\n{raw_text}\n{'-'*50}\n")
+                print(f"\n[RAW EVAL OUTPUT]\n{raw_text}\n{'-'*50}\n")
                 
                 # Fallback File Logger (100% reliable)
                 try:
@@ -348,7 +348,7 @@ class LiteLLMJudge(DeepEvalBaseLLM):
 
 # ============================================================
 
-judge = LiteLLMJudge(model_name=CFG.eval_model, api_key=GROQ_API_KEY, rpm_limit=25, tpm_limit=11000, max_tokens=1024)
+judge = LiteLLMJudge(model_name=CFG.eval_model, api_key=GROQ_API_KEY, rpm_limit=120, tpm_limit=200000, max_tokens=1024)
 metrics = [
     AnswerRelevancyMetric(threshold=CFG.eval_threshold, model=judge, async_mode=False),
     GEval(

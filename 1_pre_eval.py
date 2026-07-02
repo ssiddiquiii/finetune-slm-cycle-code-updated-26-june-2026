@@ -132,7 +132,7 @@ class Config:
     
     max_new_tokens: int = 256
     max_input_length: int = 1024
-    eval_model: str = "groq/llama-3.3-70b-versatile"
+    eval_model: str = "groq/llama-3.1-8b-instant"
     eval_threshold: float = 0.7
     base_dir: str = "/kaggle/working/car_repair_slm_v2"
 
@@ -294,7 +294,7 @@ class LiteLLMJudge(DeepEvalBaseLLM):
                 text = resp.choices[0].message.content.strip()
                 raw_text = text
                 
-                print(f"\n[RAW GEMINI OUTPUT]\n{raw_text}\n{'-'*50}\n")
+                print(f"\n[RAW EVAL OUTPUT]\n{raw_text}\n{'-'*50}\n")
                 
                 try:
                     with open("/kaggle/working/car_repair_slm_v2/logs/judge_debug.txt", "a", encoding="utf-8") as f:
@@ -360,7 +360,7 @@ LiteLLMJudge._call_log = []
 # CELL 8 — LITTELLM JUDGE INSTANTIATION & DEEPEVAL METRICS INJECTION
 # ============================================================
 
-judge = LiteLLMJudge(model_name=CONFIG.eval_model, api_key=GROQ_API_KEY, rpm_limit=25, tpm_limit=11000, max_tokens=1024)
+judge = LiteLLMJudge(model_name=CONFIG.eval_model, api_key=GROQ_API_KEY, rpm_limit=120, tpm_limit=200000, max_tokens=1024)
 
 print("Initializing programmatic criteria array via SingleTurnParams...")
 metrics = [
