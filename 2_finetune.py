@@ -106,14 +106,14 @@ class Config:
     model_id: str = "unsloth/gemma-4-E2B-it"
     dataset_repo: str = "ssiddiquii/car-repair-hq-342" 
     
-    lora_r: int = 16
-    lora_alpha: int = 16              # FIX: alpha=rank ratio (1.0) per QLoRA paper for small datasets.
+    lora_r: int = 8                   # ANTI-FLUFF FIX: 16→8. Restricts capacity to memorize fluff.
+    lora_alpha: int = 16              # ANTI-FLUFF FIX: alpha=2*rank is a standard to stabilize training.
     lora_dropout: float = 0           # Unsloth optimized path requires dropout=0.
     
-    epochs: int = 3                   # FIX: 10→3. 342 rows × 10 epochs = guaranteed overfit (Cluster B).
+    epochs: int = 3                   # 3 epochs is standard.
     per_device_batch_size: int = 1    # Keep at 1 for T4 VRAM safety.
     grad_accumulation: int = 16       # Effective batch = 1 × 16 = 16.
-    learning_rate: float = 1e-4       # FIX: 2e-4→1e-4. Standard QLoRA LR for domain adaptation.
+    learning_rate: float = 2e-5       # ANTI-FLUFF FIX: 1e-4→2e-5. Prevents overwriting base knowledge.
     max_seq_length: int = 1024        # FIX: 512→1024. Must match eval scripts to avoid unfair scoring.
     warmup_steps: float = 0.03
     
@@ -293,7 +293,8 @@ sft_config = SFTConfig(
     max_seq_length=CONFIG.max_seq_length,
     dataset_text_field="text", 
     logging_steps=5,
-    weight_decay=0.01,            # FIX: L2 regularization prevents overfitting on small datasets.
+    weight_decay=0.05,            # ANTI-FLUFF FIX: 0.01→0.05. Stronger L2 regularization against overfitting.
+    neftune_noise_alpha=5,        # ANTI-FLUFF FIX: Adds embedding noise, proven to stop generic fluff responses.
     
     eval_strategy="steps",
     eval_steps=10,
