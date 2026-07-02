@@ -299,7 +299,7 @@ sft_config = SFTConfig(
     eval_steps=10,
     save_strategy="steps",
     save_steps=20,
-    save_total_limit=1,           # FIX: Keep 1 checkpoint to save Kaggle disk space.
+    save_total_limit=3,           # FIX: Keep 3 checkpoints to ensure best is not evicted.
     load_best_model_at_end=True,  # CRITICAL: saves best val-loss checkpoint
     metric_for_best_model="eval_loss",  # Lower loss = better model.
     greater_is_better=False,      # For loss, lower is better.
@@ -357,16 +357,20 @@ import gc
 gc.collect()
 
 # ============================================================
-# CELL 10 — LOCAL GGUF EXPORT (FOR LLAMA-CPP-PYTHON BACKEND)
+# CELL 10 — HUGGINGFACE GGUF EXPORT (FOR LLAMA-CPP-PYTHON BACKEND)
 # ● CONVERTS FINE-TUNED MODEL INTO 4-BIT GGUF FORMAT
-# ● SAVES DIRECTLY TO KAGGLE WORKING DIRECTORY (~1.5GB)
-# ● DOWNLOAD THIS FILE TO USE IN YOUR PYTHON BACKEND
+# ● PUSHES DIRECTLY TO HUGGINGFACE HUB TO AVOID KAGGLE DISK LIMITS
+# ● DOWNLOAD THIS FILE FROM HF TO USE IN YOUR PYTHON BACKEND
 # ============================================================
 
-print("Converting and saving GGUF model locally...")
-model.save_pretrained_gguf(
-    "car_specialist_gemma2b", 
-    tokenizer, 
-    quantization_method = "q4_k_m"
-)
-print("✅ GGUF model saved locally! Download the 'car_specialist_gemma2b' folder from Kaggle output.")
+print("Converting and pushing GGUF model directly to HuggingFace Hub...")
+try:
+    model.push_to_hub_gguf(
+        repo_id="ssiddiquii/car-repair-gemma-gguf", 
+        tokenizer=tokenizer, 
+        quantization_method="q4_k_m",
+        token=HF_TOKEN,
+    )
+    print("✅ GGUF model successfully pushed to HuggingFace Hub (ssiddiquii/car-repair-gemma-gguf)!")
+except Exception as e:
+    print(f"❌ Failed to push GGUF to HuggingFace Hub. Ensure HF_TOKEN has 'WRITE' permissions. Error: {e}")
