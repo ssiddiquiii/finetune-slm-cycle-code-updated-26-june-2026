@@ -83,8 +83,18 @@ print("✓ Groq API secure bridge verified.")
 @dataclass
 class PostEvalConfig:
     base_model: str = "unsloth/gemma-4-E2B-it"
-    adapter_dir: str = "/kaggle/input/qlora-adapters" 
-    baseline_dir: str = "/kaggle/input/baseline-artifacts" 
+    
+    # Dynamic fallback paths to support both isolated notebooks and single mega-notebook runs
+    adapter_dirs: list = (
+        "/kaggle/input/qlora-adapters", 
+        "/kaggle/working/lora_adapters_qlora",
+        "./lora_adapters_qlora"
+    )
+    baseline_dirs: list = (
+        "/kaggle/input/baseline-artifacts",
+        "/kaggle/working/car_repair_slm_v2/results",
+        "./results"
+    )
     
     eval_model: str = "groq/llama-3.1-8b-instant"
     eval_threshold: float = 0.7
@@ -104,12 +114,25 @@ print("=" * 60)
 print("LOADING BASELINE ARTIFACTS")
 print("=" * 60)
 
-baseline_answers_path = Path(CFG.baseline_dir) / "baseline_answers_v2.json"
-baseline_scores_path = Path(CFG.baseline_dir) / "baseline_scores_v2.json"
+def resolve_path(filename, dirs):
+    for d in dirs:
+        p = Path(d) / filename
+        if p.exists(): return p
+    return None
 
-assert baseline_answers_path.exists(), f"CRITICAL: Cannot find {baseline_answers_path}. Check Kaggle Dataset mount."
-assert baseline_scores_path.exists(), f"CRITICAL: Cannot find {baseline_scores_path}. Check Kaggle Dataset mount."
-assert Path(CFG.adapter_dir).exists(), f"CRITICAL: Cannot find LoRA adapters at {CFG.adapter_dir}. Check Kaggle Dataset mount."
+def resolve_dir(dirs):
+    for d in dirs:
+        p = Path(d)
+        if p.exists() and p.is_dir(): return p
+    return None
+
+baseline_answers_path = resolve_path("baseline_answers_v2.json", CFG.baseline_dirs)
+baseline_scores_path = resolve_path("baseline_scores_v2.json", CFG.baseline_dirs)
+CFG.adapter_dir = str(resolve_dir(CFG.adapter_dirs) or CFG.adapter_dirs[0])
+
+assert baseline_answers_path, f"CRITICAL: Cannot find baseline_answers_v2.json in {CFG.baseline_dirs}. Check Kaggle mount."
+assert baseline_scores_path, f"CRITICAL: Cannot find baseline_scores_v2.json in {CFG.baseline_dirs}. Check Kaggle mount."
+assert Path(CFG.adapter_dir).exists(), f"CRITICAL: Cannot find LoRA adapters in {CFG.adapter_dirs}. Check Kaggle mount."
 
 with open(baseline_answers_path) as f: baseline_answers = json.load(f)
 with open(baseline_scores_path) as f: baseline_scores = json.load(f)
