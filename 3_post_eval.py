@@ -28,9 +28,12 @@ print("="*60)
 # ● ENVIRONMENT VERIFIED BEFORE LOADING HEAVYWEIGHT MODEL WEIGHTS
 # ============================================================
 import logging
+import warnings
 
 # SILENCE EARLY FRAMEWORK CHATTER: Suppresses multi-modal placeholder warning hooks on startup
 logging.getLogger("unsloth").setLevel(logging.ERROR)
+warnings.filterwarnings("ignore", message=".*is_flash_linear_attention_available.*")
+warnings.filterwarnings("ignore", category=FutureWarning)
 
 import unsloth # MUST BE FIRST AMONG DEEP LEARNING LIBRARIES
 import torch, transformers, peft, trl, accelerate, bitsandbytes, sys, datasets
