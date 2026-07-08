@@ -110,7 +110,7 @@ class Config:
     lora_alpha: int = 16              # ANTI-FLUFF FIX: alpha=2*rank is a standard to stabilize training.
     lora_dropout: float = 0           # Unsloth optimized path requires dropout=0.
     
-    epochs: int = 3                   # 3 epochs is standard.
+    epochs: int = 1                   # ANTI-FORGETTING FIX: 3→1. 3 epochs is still too much for 342 rows.
     per_device_batch_size: int = 1    # Keep at 1 for T4 VRAM safety.
     grad_accumulation: int = 16       # Effective batch = 1 × 16 = 16.
     learning_rate: float = 2e-5       # ANTI-FLUFF FIX: 1e-4→2e-5. Prevents overwriting base knowledge.
