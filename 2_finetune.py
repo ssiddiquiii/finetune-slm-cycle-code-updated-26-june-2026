@@ -118,10 +118,10 @@ class Config:
     lora_alpha: int = 16              # ANTI-FLUFF FIX: alpha=2*rank is a standard to stabilize training.
     lora_dropout: float = 0           # Unsloth optimized path requires dropout=0.
     
-    epochs: int = 3                   # V2: 3 epochs
+    epochs: int = 1                   # V3: 1 epoch
     per_device_batch_size: int = 4    # Tuned for Gemma-4 on T4: balances throughput vs VRAM.
     grad_accumulation: int = 4        # Effective batch = 4 × 4 = 16. Mirrors original 1×16 setup.
-    learning_rate: float = 1e-5       # V2: Even slower learning rate than V1
+    learning_rate: float = 2e-5       # V3: Slightly raised from 1e-5 but still low
     max_seq_length: int = 1024        # FIX: 512→1024. Must match eval scripts to avoid unfair scoring.
     warmup_steps: float = 0.03
     
