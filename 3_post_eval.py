@@ -8,6 +8,8 @@
 # ============================================================
 import os
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+os.environ["TRANSFORMERS_VERBOSITY"] = "error"
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
 print("Installing stable evaluation stack...")
 !pip uninstall -y torchao -q 2>/dev/null
@@ -31,9 +33,10 @@ import logging
 import warnings
 
 # SILENCE EARLY FRAMEWORK CHATTER: Suppresses multi-modal placeholder warning hooks on startup
+warnings.filterwarnings("ignore") # Brutally ignore ALL Python warnings
 logging.getLogger("unsloth").setLevel(logging.ERROR)
-warnings.filterwarnings("ignore", message=".*is_flash_linear_attention_available.*")
-warnings.filterwarnings("ignore", category=FutureWarning)
+logging.getLogger("unsloth_zoo").setLevel(logging.ERROR)
+logging.getLogger("transformers").setLevel(logging.ERROR)
 
 import unsloth # MUST BE FIRST AMONG DEEP LEARNING LIBRARIES
 import torch, transformers, peft, trl, accelerate, bitsandbytes, sys, datasets
@@ -158,7 +161,7 @@ model, tokenizer = FastModel.from_pretrained(
     model_name=CFG.adapter_dir,
     max_seq_length=CFG.max_input_length,
     load_in_4bit=True,               
-    dtype=torch.float16,             
+    dtype=None,                      # GEMMA-4 FIX: Let Unsloth auto-select dtype to prevent crashes
     full_finetuning=False,
     token=HF_TOKEN,
 )
@@ -173,6 +176,24 @@ assert lora_count > 0, "No LoRA modules — adapter not attached"
 try: FastModel.for_inference(model)
 except AttributeError: pass
 model.eval()
+
+# ============================================================
+# THE ELEGANT ZERO-MEMORY FIX: GEMMA-4 DTYPE MISMATCH (INFERENCE)
+# ============================================================
+def _fix_per_layer_dtype(module, args):
+    x = args[0]
+    if isinstance(x, torch.Tensor) and torch.is_floating_point(x) and hasattr(module, "weight"):
+        if x.dtype != module.weight.dtype:
+            return (x.to(module.weight.dtype),) + args[1:]
+    return args
+
+_hook_count = 0
+for name, module in model.named_modules():
+    if "per_layer" in name and isinstance(module, torch.nn.Linear):
+        module.register_forward_pre_hook(_fix_per_layer_dtype)
+        _hook_count += 1
+if _hook_count > 0:
+    print(f"✓ DTYPE FIX: Registered JIT dtype cast hooks on {_hook_count} Gemma-4 per-layer modules.")
 
 # ============================================================
 # CELL 5 — FINE-TUNED MODEL INFERENCE GENERATION (POST-FINETUNE)

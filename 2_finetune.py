@@ -29,10 +29,18 @@ print("="*60)
 # ● CONFIRMS TRAINING ENVIRONMENT IS READY FOR QLORA FINE-TUNING
 # ============================================================
 
+import os
+os.environ["TRANSFORMERS_VERBOSITY"] = "error"
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
+
 import logging
+import warnings
+warnings.filterwarnings("ignore") # Brutally ignore ALL Python warnings (not just FutureWarning)
 
 # SILENCE EARLY FRAMEWORK CHATTER: Suppresses multi-modal placeholder warning hooks on startup
 logging.getLogger("unsloth").setLevel(logging.ERROR)
+logging.getLogger("unsloth_zoo").setLevel(logging.ERROR)
+logging.getLogger("transformers").setLevel(logging.ERROR)
 
 import unsloth  # CRITICAL: Must be first among deep learning libraries to apply Triton patches
 import torch
@@ -92,8 +100,8 @@ print("\n✓ APIs authenticated")
 # ============================================================
 # CELL 4 — QLORA TRAINING CONFIGURATION & DIRECTORY SETUP
 # ● DEFINES BASE MODEL ID AND HF DATASET REPOSITORY TARGETS
-# ● SETS LORA RANK (R=16) AND ALPHA (16) FOR DOMAIN ADAPTATION
-# ● CONFIGURES TRAINING: 3 EPOCHS, LR=1E-4, MAX_SEQ=1024
+# ● SETS LORA RANK (R=8) AND ALPHA (16) FOR DOMAIN ADAPTATION
+# ● CONFIGURES TRAINING: 1 EPOCH, LR=2E-5, MAX_SEQ=1024
 # ● CALIBRATES BATCH SIZE AND GRADIENT ACCUMULATION FOR T4 VRAM
 # ● CREATES CHECKPOINT AND ADAPTER OUTPUT DIRECTORIES
 # ============================================================
@@ -110,10 +118,10 @@ class Config:
     lora_alpha: int = 16              # ANTI-FLUFF FIX: alpha=2*rank is a standard to stabilize training.
     lora_dropout: float = 0           # Unsloth optimized path requires dropout=0.
     
-    epochs: int = 1                   # ANTI-FORGETTING FIX: 3→1. 3 epochs is still too much for 342 rows.
-    per_device_batch_size: int = 1    # Keep at 1 for T4 VRAM safety.
-    grad_accumulation: int = 16       # Effective batch = 1 × 16 = 16.
-    learning_rate: float = 2e-5       # ANTI-FLUFF FIX: 1e-4→2e-5. Prevents overwriting base knowledge.
+    epochs: int = 3                   # BASELINE: 3 epochs
+    per_device_batch_size: int = 4    # Tuned for Gemma-4 on T4: balances throughput vs VRAM.
+    grad_accumulation: int = 4        # Effective batch = 4 × 4 = 16. Mirrors original 1×16 setup.
+    learning_rate: float = 1e-4       # BASELINE: 1e-4 learning rate
     max_seq_length: int = 1024        # FIX: 512→1024. Must match eval scripts to avoid unfair scoring.
     warmup_steps: float = 0.03
     
@@ -191,12 +199,11 @@ print(f"\n✓ Aligned multi-turn training data mapped. Sample schema: {train_ds[
 # ● PRE-RENDERS DATASET TO FLAT TEXT FOR SFTTRAINER CONSUMPTION
 # ============================================================
 
-import logging
 import gc
 import torch
 from unsloth import FastModel
 
-# SILENCE AUDIO/VISION HOOK LOG SPAM: Suppresses non-breaking multi-modal placeholder warnings
+# SILENCE AUDIO/VISION HOOK LOG SPAM (already set at top, but reaffirm after model imports)
 logging.getLogger("unsloth").setLevel(logging.ERROR)
 
 # Clear VRAM rings before model memory allocation
@@ -209,7 +216,7 @@ model, tokenizer = FastModel.from_pretrained(
     model_name=CONFIG.model_id,
     max_seq_length=CONFIG.max_seq_length,
     load_in_4bit=True,                  
-    dtype=torch.float16,                 
+    dtype=None,                          # GEMMA-4 OOM FIX: Let Unsloth auto-select dtype to prevent massive float32 VRAM spikes.
     full_finetuning=False,
     token=HF_TOKEN,
 )
@@ -224,10 +231,38 @@ model = FastModel.get_peft_model(
     lora_dropout=CONFIG.lora_dropout,
     bias="none",
     target_modules=["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"],
-    use_gradient_checkpointing="unsloth",
+    # REVERT: We MUST use gradient checkpointing to prevent OOM on 16GB T4.
+    use_gradient_checkpointing=True,
     random_state=42,
     use_rslora=False,
 )
+
+print("✓ LoRA adapters injected. Gradient checkpointing enabled (to prevent OOM).")
+
+# ============================================================
+# THE ELEGANT ZERO-MEMORY FIX: GEMMA-4 DTYPE MISMATCH
+# Unsloth forces float32 training, so intermediate activations are float32.
+# But Gemma-4's per_layer projection and gate weights remain float16.
+# Casting all weights to fp32 caused a CUDA OOM (16GB T4 isn't enough).
+# FIX: Dynamically cast the fp32 activation to fp16 just-in-time 
+# using a universal pre-forward hook strictly on all "per_layer" modules.
+# ============================================================
+def _fix_per_layer_dtype(module, args):
+    x = args[0]
+    # BUG FIX: Only cast floating-point tensors (activations). Never cast integer indices (input_ids).
+    if isinstance(x, torch.Tensor) and torch.is_floating_point(x) and hasattr(module, "weight"):
+        if x.dtype != module.weight.dtype:
+            return (x.to(module.weight.dtype),) + args[1:]
+    return args
+
+_hook_count = 0
+for name, module in model.named_modules():
+    # BUG FIX: Strictly limit to Linear layers. Prevents hooking Embedding layers like `embed_tokens_per_layer`.
+    if "per_layer" in name and isinstance(module, torch.nn.Linear):
+        module.register_forward_pre_hook(_fix_per_layer_dtype)
+        _hook_count += 1
+
+print(f"✓ DTYPE FIX: Registered JIT dtype cast hooks on {_hook_count} Gemma-4 per-layer modules.")
 
 def render_row(example):
     return {"text": tokenizer.apply_chat_template(example["messages"], tokenize=False, add_generation_prompt=False)}
@@ -261,12 +296,10 @@ if "<|turn>user" in sample_text:
 elif "<start_of_turn>user" in sample_text:
     INSTRUCTION_PART, RESPONSE_PART = "<start_of_turn>user\n", "<start_of_turn>model\n"
 
-# OPTIMIZED FOR GEMMA-4: Balancing Batch vs Accumulation to mitigate token drift
-OPTIMIZED_BATCH_SIZE = 4
-OPTIMIZED_ACCUMULATION = 4
 
+# BUG FIX: These values are now sourced from CONFIG to ensure Config class actually controls training.
 total_steps = math.ceil(
-    len(train_ds) * CONFIG.epochs / (OPTIMIZED_BATCH_SIZE * OPTIMIZED_ACCUMULATION)
+    len(train_ds) * CONFIG.epochs / (CONFIG.per_device_batch_size * CONFIG.grad_accumulation)
 )
 computed_warmup_steps = math.ceil(total_steps * CONFIG.warmup_steps)
 
@@ -279,29 +312,28 @@ sft_config = SFTConfig(
     output_dir=str(CHECKPOINTS),
     num_train_epochs=CONFIG.epochs,
     
-    # TUNED MATRICES: Reduces batch-to-batch token variance
-    per_device_train_batch_size=OPTIMIZED_BATCH_SIZE, 
-    gradient_accumulation_steps=OPTIMIZED_ACCUMULATION,     
+    # SYNCED FROM CONFIG: Both values now sourced from Config class — changing Config actually works.
+    per_device_train_batch_size=CONFIG.per_device_batch_size,
+    gradient_accumulation_steps=CONFIG.grad_accumulation,
     
     learning_rate=CONFIG.learning_rate,
     lr_scheduler_type="cosine",
     warmup_steps=computed_warmup_steps,
     max_grad_norm=0.3,
     optim="paged_adamw_8bit", 
-    bf16=(torch.cuda.get_device_capability(0)[0] >= 8),
-    fp16=(torch.cuda.get_device_capability(0)[0] < 8),
+    bf16=False,                   # GEMMA-4 FIX: Gemma-4 requires float32 training. fp16/bf16 crash on per_layer gates.
+    fp16=False,                   # GEMMA-4 FIX: Unsloth confirms: "float16 precision for gemma4 won't work"
     max_seq_length=CONFIG.max_seq_length,
     dataset_text_field="text", 
     logging_steps=5,
     weight_decay=0.05,            # ANTI-FLUFF FIX: 0.01→0.05. Stronger L2 regularization against overfitting.
-    neftune_noise_alpha=5,        # ANTI-FLUFF FIX: Adds embedding noise, proven to stop generic fluff responses.
     
     eval_strategy="steps",
-    eval_steps=10,
+    eval_steps=5,         # CRITICAL FIX: 10→5. With 16 total steps, this gives 3 eval points.
     save_strategy="steps",
-    save_steps=20,
-    save_total_limit=3,           # FIX: Keep 3 checkpoints to ensure best is not evicted.
-    load_best_model_at_end=True,  # CRITICAL: saves best val-loss checkpoint
+    save_steps=5,         # CRITICAL FIX: 20→5. save_steps=20 with 16 total steps = ZERO checkpoints saved!
+    save_total_limit=3,           # Keep 3 checkpoints to ensure best is not evicted.
+    load_best_model_at_end=True,  # CRITICAL: loads the best val-loss checkpoint, not the final one.
     metric_for_best_model="eval_loss",  # Lower loss = better model.
     greater_is_better=False,      # For loss, lower is better.
     
@@ -344,34 +376,3 @@ shutil.make_archive(base_name=str(ADAPTERS), format="zip", root_dir=str(ADAPTERS
 
 print(f"✓ Zip created: {zip_path}")
 print("Ready for Post-Eval fusion processing.")
-
-# ============================================================
-# AGGRESSIVE DISK CLEANUP
-# Kaggle only has 20GB disk space. GGUF conversion requires ~15GB.
-# We must delete the bulky checkpoints and optimizer states to prevent Errno 28.
-# ============================================================
-print("\nPerforming brutal disk cleanup before GGUF conversion...")
-if CHECKPOINTS.exists():
-    shutil.rmtree(str(CHECKPOINTS))
-    print(f"✓ Deleted training checkpoints to free up space: {CHECKPOINTS}")
-import gc
-gc.collect()
-
-# ============================================================
-# CELL 10 — HUGGINGFACE GGUF EXPORT (FOR LLAMA-CPP-PYTHON BACKEND)
-# ● CONVERTS FINE-TUNED MODEL INTO 4-BIT GGUF FORMAT
-# ● PUSHES DIRECTLY TO HUGGINGFACE HUB TO AVOID KAGGLE DISK LIMITS
-# ● DOWNLOAD THIS FILE FROM HF TO USE IN YOUR PYTHON BACKEND
-# ============================================================
-
-print("Converting and pushing GGUF model directly to HuggingFace Hub...")
-try:
-    model.push_to_hub_gguf(
-        repo_id="ssiddiquii/car-repair-gemma-gguf", 
-        tokenizer=tokenizer, 
-        quantization_method="q4_k_m",
-        token=HF_TOKEN,
-    )
-    print("✅ GGUF model successfully pushed to HuggingFace Hub (ssiddiquii/car-repair-gemma-gguf)!")
-except Exception as e:
-    print(f"❌ Failed to push GGUF to HuggingFace Hub. Ensure HF_TOKEN has 'WRITE' permissions. Error: {e}")
