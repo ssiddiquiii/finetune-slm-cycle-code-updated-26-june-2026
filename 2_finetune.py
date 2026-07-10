@@ -114,14 +114,14 @@ class Config:
     model_id: str = "unsloth/gemma-4-E2B-it"
     dataset_repo: str = "ssiddiquii/car-repair-hq-342" 
     
-    lora_r: int = 8                   # ANTI-FLUFF FIX: 16→8. Restricts capacity to memorize fluff.
-    lora_alpha: int = 16              # ANTI-FLUFF FIX: alpha=2*rank is a standard to stabilize training.
+    lora_r: int = 16                  # V4 FIX: Increased to 16. Technical facts need more capacity to be stored properly.
+    lora_alpha: int = 32              # V4 FIX: Standard 2x multiplier for r=16.
     lora_dropout: float = 0           # Unsloth optimized path requires dropout=0.
     
-    epochs: int = 1                   # V3: 1 epoch
+    epochs: int = 3                   # V4 FIX: 1 epoch is too short. 3 epochs allow the model to actually learn the facts.
     per_device_batch_size: int = 4    # Tuned for Gemma-4 on T4: balances throughput vs VRAM.
     grad_accumulation: int = 4        # Effective batch = 4 × 4 = 16. Mirrors original 1×16 setup.
-    learning_rate: float = 2e-5       # V3: Slightly raised from 1e-5 but still low
+    learning_rate: float = 2e-4       # V4 FIX: QLoRA standard is 2e-4. Lower rates (2e-5) cause severe underfitting.
     max_seq_length: int = 1024        # FIX: 512→1024. Must match eval scripts to avoid unfair scoring.
     warmup_steps: float = 0.03
     
@@ -327,6 +327,7 @@ sft_config = SFTConfig(
     dataset_text_field="text", 
     logging_steps=5,
     weight_decay=0.05,            # ANTI-FLUFF FIX: 0.01→0.05. Stronger L2 regularization against overfitting.
+    neftune_noise_alpha=5,        # V4 MAGIC SAUCE: Prevents 3-epoch overfitting by adding uniform noise to embeddings.
     
     eval_strategy="steps",
     eval_steps=5,         # CRITICAL FIX: 10→5. With 16 total steps, this gives 3 eval points.
