@@ -118,10 +118,10 @@ class Config:
     lora_alpha: int = 16              # V5 FIX: Reverted to 16 (Back to V3 baseline)
     lora_dropout: float = 0           # Unsloth optimized path requires dropout=0.
     
-    epochs: int = 2                   # V6 ISOLATED CHANGE: 1 -> 2. Model needs to see facts twice to learn them properly, NEFTune will prevent overfitting.
+    epochs: int = 1                   # V7 ISOLATED CHANGE: Reverted to 1 (V5 baseline) since 2 caused overfitting.
     per_device_batch_size: int = 4    # Tuned for Gemma-4 on T4: balances throughput vs VRAM.
     grad_accumulation: int = 4        # Effective batch = 4 × 4 = 16. Mirrors original 1×16 setup.
-    learning_rate: float = 2e-5       # V5 FIX: Reverted to 2e-5 (Back to V3 baseline)
+    learning_rate: float = 1e-5       # V7 ISOLATED CHANGE: Slowed down from 2e-5 to 1e-5 to stabilize learning.
     max_seq_length: int = 1024        # FIX: 512→1024. Must match eval scripts to avoid unfair scoring.
     warmup_steps: float = 0.03
     
