@@ -160,15 +160,34 @@ print("=" * 60)
 # CRITICAL FIX: Unsloth sometimes renames the base model in adapter_config.json to a non-existent 4-bit repo 
 # during saving. We force it back to the original base model before loading to prevent OSError crashes.
 import json
+import shutil
 adapter_config_path = Path(CFG.adapter_dir) / "adapter_config.json"
+
 if adapter_config_path.exists():
     with open(adapter_config_path, "r") as f:
         adapter_cfg = json.load(f)
     if adapter_cfg.get("base_model_name_or_path") != CFG.base_model:
         adapter_cfg["base_model_name_or_path"] = CFG.base_model
-        with open(adapter_config_path, "w") as f:
-            json.dump(adapter_cfg, f, indent=4)
-        print(f"✓ Fixed adapter_config.json base_model to {CFG.base_model}")
+        
+        try:
+            with open(adapter_config_path, "w") as f:
+                json.dump(adapter_cfg, f, indent=4)
+            print(f"✓ Fixed adapter_config.json base_model to {CFG.base_model}")
+        except OSError as e:
+            # Kaggle Dataset mounts are read-only (Errno 30). We copy it to a writable temp dir.
+            print(f"⚠ Read-only file system detected ({e}). Creating a writable adapter copy...")
+            tmp_adapter_dir = Path("/kaggle/working/patched_adapter")
+            if tmp_adapter_dir.exists():
+                shutil.rmtree(tmp_adapter_dir)
+            shutil.copytree(CFG.adapter_dir, tmp_adapter_dir)
+            
+            # Patch the copied version
+            tmp_config_path = tmp_adapter_dir / "adapter_config.json"
+            with open(tmp_config_path, "w") as f:
+                json.dump(adapter_cfg, f, indent=4)
+            
+            CFG.adapter_dir = str(tmp_adapter_dir)
+            print(f"✓ Patched base_model inside writable copy: {CFG.adapter_dir}")
 
 model, tokenizer = FastModel.from_pretrained(
     model_name=CFG.adapter_dir,
