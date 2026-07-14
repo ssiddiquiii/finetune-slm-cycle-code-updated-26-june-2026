@@ -219,6 +219,7 @@ model, tokenizer = FastModel.from_pretrained(
     dtype=None,                          # GEMMA-4 OOM FIX: Let Unsloth auto-select dtype to prevent massive float32 VRAM spikes.
     full_finetuning=False,
     token=HF_TOKEN,
+    use_exact_model_name=True,           # CRITICAL FIX: Stops Unsloth from mapping to its broken 4-bit repo!
 )
 
 # EXPLICIT STATE LOCK: Pre-emptively disable caching to silence runtime trainer logs

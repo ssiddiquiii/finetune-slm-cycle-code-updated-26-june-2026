@@ -180,6 +180,7 @@ model, tokenizer = FastModel.from_pretrained(
     load_in_4bit=True,               
     dtype=None,                      # GEMMA-4 FIX: Let Unsloth auto-select dtype to prevent crashes
     token=HF_TOKEN,
+    use_exact_model_name=True,       # CRITICAL FIX: Stops Unsloth from mapping to its broken 4-bit repo!
 )
 
 print("=" * 60)
