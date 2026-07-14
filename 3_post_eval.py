@@ -121,21 +121,31 @@ def resolve_path(filename, dirs):
     for d in dirs:
         p = Path(d) / filename
         if p.exists(): return p
+    # Fallback: Deep search in Kaggle input just in case mount paths changed (e.g. username nested dirs)
+    kaggle_input = Path("/kaggle/input")
+    if kaggle_input.exists():
+        matches = list(kaggle_input.rglob(filename))
+        if matches: return matches[0]
     return None
 
-def resolve_dir(dirs):
+def resolve_dir(target_file, dirs):
     for d in dirs:
         p = Path(d)
-        if p.exists() and p.is_dir(): return p
+        if p.exists() and p.is_dir() and (p / target_file).exists(): return p
+    # Fallback deep search
+    kaggle_input = Path("/kaggle/input")
+    if kaggle_input.exists():
+        matches = list(kaggle_input.rglob(target_file))
+        if matches: return matches[0].parent
     return None
 
 baseline_answers_path = resolve_path("baseline_answers_v2.json", CFG.baseline_dirs)
 baseline_scores_path = resolve_path("baseline_scores_v2.json", CFG.baseline_dirs)
-CFG.adapter_dir = str(resolve_dir(CFG.adapter_dirs) or CFG.adapter_dirs[0])
+CFG.adapter_dir = str(resolve_dir("adapter_config.json", CFG.adapter_dirs) or CFG.adapter_dirs[0])
 
-assert baseline_answers_path, f"CRITICAL: Cannot find baseline_answers_v2.json in {CFG.baseline_dirs}. Check Kaggle mount."
-assert baseline_scores_path, f"CRITICAL: Cannot find baseline_scores_v2.json in {CFG.baseline_dirs}. Check Kaggle mount."
-assert Path(CFG.adapter_dir).exists(), f"CRITICAL: Cannot find LoRA adapters in {CFG.adapter_dirs}. Check Kaggle mount."
+assert baseline_answers_path, f"CRITICAL: Cannot find baseline_answers_v2.json in {CFG.baseline_dirs} or anywhere in /kaggle/input/. Check Kaggle mount."
+assert baseline_scores_path, f"CRITICAL: Cannot find baseline_scores_v2.json in {CFG.baseline_dirs} or anywhere in /kaggle/input/. Check Kaggle mount."
+assert Path(CFG.adapter_dir).exists() and (Path(CFG.adapter_dir) / "adapter_config.json").exists(), f"CRITICAL: Cannot find LoRA adapters in {CFG.adapter_dirs} or anywhere in /kaggle/input/. Check Kaggle mount."
 
 with open(baseline_answers_path) as f: baseline_answers = json.load(f)
 with open(baseline_scores_path) as f: baseline_scores = json.load(f)
