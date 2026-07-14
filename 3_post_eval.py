@@ -157,46 +157,27 @@ print("=" * 60)
 print("LOADING FINE-TUNED MODEL (QLoRA 4-BIT)")
 print("=" * 60)
 
-# CRITICAL FIX: Unsloth sometimes renames the base model in adapter_config.json to a non-existent 4-bit repo 
-# during saving. We force it back to the original base model before loading to prevent OSError crashes.
-import json
-import shutil
-adapter_config_path = Path(CFG.adapter_dir) / "adapter_config.json"
+from peft import PeftModel
 
-if adapter_config_path.exists():
-    with open(adapter_config_path, "r") as f:
-        adapter_cfg = json.load(f)
-    if adapter_cfg.get("base_model_name_or_path") != CFG.base_model:
-        adapter_cfg["base_model_name_or_path"] = CFG.base_model
-        
-        try:
-            with open(adapter_config_path, "w") as f:
-                json.dump(adapter_cfg, f, indent=4)
-            print(f"✓ Fixed adapter_config.json base_model to {CFG.base_model}")
-        except OSError as e:
-            # Kaggle Dataset mounts are read-only (Errno 30). We copy it to a writable temp dir.
-            print(f"⚠ Read-only file system detected ({e}). Creating a writable adapter copy...")
-            tmp_adapter_dir = Path("/kaggle/working/patched_adapter")
-            if tmp_adapter_dir.exists():
-                shutil.rmtree(tmp_adapter_dir)
-            shutil.copytree(CFG.adapter_dir, tmp_adapter_dir)
-            
-            # Patch the copied version
-            tmp_config_path = tmp_adapter_dir / "adapter_config.json"
-            with open(tmp_config_path, "w") as f:
-                json.dump(adapter_cfg, f, indent=4)
-            
-            CFG.adapter_dir = str(tmp_adapter_dir)
-            print(f"✓ Patched base_model inside writable copy: {CFG.adapter_dir}")
+# CRITICAL FIX: Bypass Unsloth's adapter_config.json bugs entirely by loading the base model explicitly first, 
+# and then manually attaching the adapter using standard HuggingFace PEFT.
+# This prevents OSError crashes related to unsloth mapping to broken 4-bit repos.
 
+# 1. Load Base Model
 model, tokenizer = FastModel.from_pretrained(
-    model_name=CFG.adapter_dir,
+    model_name=CFG.base_model,       # Explicitly load base model, NOT adapter_dir
     max_seq_length=CFG.max_input_length,
     load_in_4bit=True,               
     dtype=None,                      # GEMMA-4 FIX: Let Unsloth auto-select dtype to prevent crashes
-    full_finetuning=False,
     token=HF_TOKEN,
 )
+
+print("=" * 60)
+print(f"ATTACHING LORA ADAPTERS FROM: {CFG.adapter_dir}")
+print("=" * 60)
+
+# 2. Attach LoRA Adapter
+model = PeftModel.from_pretrained(model, CFG.adapter_dir)
 
 # Enable caching for faster inference generation loops
 model.config.use_cache = True
