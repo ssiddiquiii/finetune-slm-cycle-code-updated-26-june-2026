@@ -173,7 +173,12 @@ from peft import PeftModel
 # and then manually attaching the adapter using standard HuggingFace PEFT.
 # This prevents OSError crashes related to unsloth mapping to broken 4-bit repos.
 
-# 1. Load Base Model
+# 1. Pre-download the Base Model into cache to bypass Unsloth's forced offline-mode bugs
+from huggingface_hub import snapshot_download
+print(f"Pre-fetching base model {CFG.base_model} to guarantee local cache hit...")
+snapshot_download(repo_id=CFG.base_model, token=HF_TOKEN, ignore_patterns=["*.msgpack", "*.h5", "*.ot", "*_*.safetensors*"])
+
+# 2. Load Base Model
 model, tokenizer = FastModel.from_pretrained(
     model_name=CFG.base_model,       # Explicitly load base model, NOT adapter_dir
     max_seq_length=CFG.max_input_length,

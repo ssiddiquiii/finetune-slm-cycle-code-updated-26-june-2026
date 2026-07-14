@@ -212,6 +212,11 @@ torch.cuda.empty_cache()
 
 print("\nLoading Gemma-4 E2B-it via Unsloth in 4-BIT QLoRA...")
 
+# CRITICAL FIX: Pre-download the Base Model into cache to bypass Unsloth's forced offline-mode bugs
+from huggingface_hub import snapshot_download
+print(f"Pre-fetching base model {CONFIG.model_id} to guarantee local cache hit...")
+snapshot_download(repo_id=CONFIG.model_id, token=HF_TOKEN, ignore_patterns=["*.msgpack", "*.h5", "*.ot", "*_*.safetensors*"])
+
 model, tokenizer = FastModel.from_pretrained(
     model_name=CONFIG.model_id,
     max_seq_length=CONFIG.max_seq_length,
