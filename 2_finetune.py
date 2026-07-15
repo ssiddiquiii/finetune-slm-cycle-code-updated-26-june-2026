@@ -11,6 +11,7 @@ import os
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
 print("Installing stable training stack...")
+!pip install -q --no-warn-conflicts -U transformers
 !pip install -q --no-warn-conflicts "trl>=0.18.2,<=0.24.0" "datasets>=3.4.1,<4.4.0" "protobuf>=3.20.3,<6.0.0"
 !pip install -q --no-warn-conflicts -U unsloth
 !pip install -q --no-warn-conflicts -U "unsloth[kaggle-new] @ git+https://github.com/unslothai/unsloth.git"
@@ -212,11 +213,6 @@ torch.cuda.empty_cache()
 
 print("\nLoading Gemma-4 E2B-it via Unsloth in 4-BIT QLoRA...")
 
-# CRITICAL FIX: Pre-download the Base Model into cache to bypass Unsloth's forced offline-mode bugs
-from huggingface_hub import snapshot_download
-print(f"Pre-fetching base model {CONFIG.model_id} to guarantee local cache hit...")
-snapshot_download(repo_id=CONFIG.model_id, token=HF_TOKEN, ignore_patterns=["*.msgpack", "*.h5", "*.ot", "*_*.safetensors*"])
-
 model, tokenizer = FastModel.from_pretrained(
     model_name=CONFIG.model_id,
     max_seq_length=CONFIG.max_seq_length,
@@ -224,7 +220,6 @@ model, tokenizer = FastModel.from_pretrained(
     dtype=None,                          # GEMMA-4 OOM FIX: Let Unsloth auto-select dtype to prevent massive float32 VRAM spikes.
     full_finetuning=False,
     token=HF_TOKEN,
-    use_exact_model_name=True,           # CRITICAL FIX: Stops Unsloth from mapping to its broken 4-bit repo!
 )
 
 # EXPLICIT STATE LOCK: Pre-emptively disable caching to silence runtime trainer logs

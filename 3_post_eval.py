@@ -13,6 +13,7 @@ os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
 print("Installing stable evaluation stack...")
 !pip uninstall -y torchao -q 2>/dev/null
+!pip install -q --no-warn-conflicts -U transformers
 !pip install -q --no-warn-conflicts -U unsloth
 !pip install -q --no-warn-conflicts -U "unsloth[kaggle-new] @ git+https://github.com/unslothai/unsloth.git"
 !pip install -q --no-warn-conflicts -U "trl>=0.18.2,<=0.24.0" "datasets>=3.4.1,<4.4.0" peft accelerate bitsandbytes huggingface_hub sentencepiece "protobuf>=3.20.3,<6.0.0" deepeval litellm nest_asyncio
@@ -167,33 +168,14 @@ print("=" * 60)
 print("LOADING FINE-TUNED MODEL (QLoRA 4-BIT)")
 print("=" * 60)
 
-from peft import PeftModel
-
-# CRITICAL FIX: Bypass Unsloth's adapter_config.json bugs entirely by loading the base model explicitly first, 
-# and then manually attaching the adapter using standard HuggingFace PEFT.
-# This prevents OSError crashes related to unsloth mapping to broken 4-bit repos.
-
-# 1. Pre-download the Base Model into cache to bypass Unsloth's forced offline-mode bugs
-from huggingface_hub import snapshot_download
-print(f"Pre-fetching base model {CFG.base_model} to guarantee local cache hit...")
-snapshot_download(repo_id=CFG.base_model, token=HF_TOKEN, ignore_patterns=["*.msgpack", "*.h5", "*.ot", "*_*.safetensors*"])
-
-# 2. Load Base Model
+# Load fine-tuned model and adapters directly using Unsloth's native API
 model, tokenizer = FastModel.from_pretrained(
-    model_name=CFG.base_model,       # Explicitly load base model, NOT adapter_dir
+    model_name=CFG.adapter_dir,
     max_seq_length=CFG.max_input_length,
     load_in_4bit=True,               
     dtype=None,                      # GEMMA-4 FIX: Let Unsloth auto-select dtype to prevent crashes
     token=HF_TOKEN,
-    use_exact_model_name=True,       # CRITICAL FIX: Stops Unsloth from mapping to its broken 4-bit repo!
 )
-
-print("=" * 60)
-print(f"ATTACHING LORA ADAPTERS FROM: {CFG.adapter_dir}")
-print("=" * 60)
-
-# 2. Attach LoRA Adapter
-model = PeftModel.from_pretrained(model, CFG.adapter_dir)
 
 # Enable caching for faster inference generation loops
 model.config.use_cache = True
