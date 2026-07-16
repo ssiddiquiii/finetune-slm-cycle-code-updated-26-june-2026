@@ -115,11 +115,11 @@ class Config:
     model_id: str = "unsloth/gemma-4-E2B-it"
     dataset_repo: str = "ssiddiquii/car-repair-hq-342" 
     
-    lora_r: int = 8                   # V5 FIX: Reverted to 8 (Back to V3 baseline)
-    lora_alpha: int = 16              # V5 FIX: Reverted to 16 (Back to V3 baseline)
+    lora_r: int = 16                  # V9 ISOLATED CHANGE: Increased to 16 (from V7 baseline) to increase model memory capacity.
+    lora_alpha: int = 32              # V9 ISOLATED CHANGE: Scale alpha proportionally (2x rank).
     lora_dropout: float = 0           # Unsloth optimized path requires dropout=0.
     
-    epochs: int = 2                   # V8 ISOLATED CHANGE: Increased to 2 (from V7 baseline) to learn remaining facts under slower LR.
+    epochs: int = 1                   # V9 REVERSION: Reverted to 1 (V7 baseline) since V8 (2 epochs) did not improve correctness.
     per_device_batch_size: int = 4    # Tuned for Gemma-4 on T4: balances throughput vs VRAM.
     grad_accumulation: int = 4        # Effective batch = 4 × 4 = 16. Mirrors original 1×16 setup.
     learning_rate: float = 1e-5       # V7 ISOLATED CHANGE: Slowed down from 2e-5 to 1e-5 to stabilize learning.
